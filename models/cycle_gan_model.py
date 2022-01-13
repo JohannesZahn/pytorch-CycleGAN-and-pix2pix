@@ -3,6 +3,7 @@ import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
+from util.util import create_circular_mask
 
 
 class CycleGANModel(BaseModel):
@@ -51,6 +52,8 @@ class CycleGANModel(BaseModel):
             opt (Option class)-- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
         BaseModel.__init__(self, opt)
+        # create mask to mask synthetic images for better training
+        self.mask2d = create_circular_mask(256,256)
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
         self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
@@ -104,9 +107,13 @@ class CycleGANModel(BaseModel):
 
         The option 'direction' can be used to swap domain A and domain B.
         """
+        
         AtoB = self.opt.direction == 'AtoB'
-        self.real_A = input['A' if AtoB else 'B'].to(self.device)
+        self.real_A = input['A' if AtoB else 'B']
         self.real_B = input['B' if AtoB else 'A'].to(self.device)
+        batch_size = self.real_A.size()[0]
+        self.real_A[:,:,self.mask2d] = torch.ones(size=[batch_size,3,1],dtype=torch.float)*-1
+        self.real_A = self.real_A.to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
